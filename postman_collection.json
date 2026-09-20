@@ -1,0 +1,364 @@
+{
+  "info": {
+    "name": "Text-to-Speech API",
+    "description": "API tests for the Text-to-Speech Flask backend (POST /api/tts, GET /api/voices, GET /api/health).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:5000" }
+  ],
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": { "raw": "{{baseUrl}}/api/health", "host": ["{{baseUrl}}"], "path": ["api", "health"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+              "pm.test('Body has status ok', () => {",
+              "  const json = pm.response.json();",
+              "  pm.expect(json.status).to.eql('ok');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Get All Voices",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": { "raw": "{{baseUrl}}/api/voices", "host": ["{{baseUrl}}"], "path": ["api", "voices"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+              "pm.test('Response has languages and voices', () => {",
+              "  const json = pm.response.json();",
+              "  pm.expect(json.success).to.be.true;",
+              "  pm.expect(json.languages).to.have.property('en');",
+              "  pm.expect(json.voices).to.have.property('en');",
+              "});",
+              "pm.test('Includes Indian and foreign languages', () => {",
+              "  const json = pm.response.json();",
+              "  ['hi', 'ta', 'bn', 'te'].forEach(c => pm.expect(json.languages).to.have.property(c));",
+              "  ['ja', 'ko', 'ar', 'ru'].forEach(c => pm.expect(json.languages).to.have.property(c));",
+              "  pm.expect(json.language_groups).to.have.property('Indian Languages');",
+              "  pm.expect(json.language_groups).to.have.property('Other Languages');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Get Voices Filtered By Language",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/voices?language=en",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "voices"],
+          "query": [{ "key": "language", "value": "en" }]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Get Voices - Invalid Language (400)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/voices?language=zz",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "voices"],
+          "query": [{ "key": "language", "value": "zz" }]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 400', () => pm.response.to.have.status(400));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Generate Speech - Success",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"text\": \"Welcome to our application.\",\n  \"language\": \"en\",\n  \"voice\": \"en-us-standard\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/tts", "host": ["{{baseUrl}}"], "path": ["api", "tts"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+              "pm.test('Response has audio_url', () => {",
+              "  const json = pm.response.json();",
+              "  pm.expect(json.success).to.be.true;",
+              "  pm.expect(json.audio_url).to.match(/^\\/audio\\/.+\\.mp3$/);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Generate Speech - Indian Language (Tamil)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"text\": \"Welcome to our application.\",\n  \"language\": \"ta\",\n  \"voice\": \"ta-standard\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/tts", "host": ["{{baseUrl}}"], "path": ["api", "tts"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Generate Speech - Foreign Language (Japanese)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"text\": \"Welcome to our application.\",\n  \"language\": \"ja\",\n  \"voice\": \"ja-standard\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/tts", "host": ["{{baseUrl}}"], "path": ["api", "tts"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Generate Speech - Regional Voice (Chinese Taiwan)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"text\": \"Welcome to our application.\",\n  \"language\": \"zh\",\n  \"voice\": \"zh-tw-standard\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/tts", "host": ["{{baseUrl}}"], "path": ["api", "tts"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Generate Speech - Empty Text (400)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"text\": \"\",\n  \"language\": \"en\",\n  \"voice\": \"en-us-standard\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/tts", "host": ["{{baseUrl}}"], "path": ["api", "tts"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 400', () => pm.response.to.have.status(400));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Generate Speech - Text Too Long (400)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"text\": \"{{$randomLoremParagraphs}} {{$randomLoremParagraphs}} {{$randomLoremParagraphs}} {{$randomLoremParagraphs}} {{$randomLoremParagraphs}}\",\n  \"language\": \"en\",\n  \"voice\": \"en-us-standard\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/tts", "host": ["{{baseUrl}}"], "path": ["api", "tts"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 400', () => pm.response.to.have.status(400));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Generate Speech - Invalid Language (400)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"text\": \"Hello\",\n  \"language\": \"zz\",\n  \"voice\": \"en-us-standard\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/tts", "host": ["{{baseUrl}}"], "path": ["api", "tts"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 400', () => pm.response.to.have.status(400));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Generate Speech - Voice Not In Language (400)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"text\": \"Hello\",\n  \"language\": \"en\",\n  \"voice\": \"hi-standard\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/tts", "host": ["{{baseUrl}}"], "path": ["api", "tts"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 400', () => pm.response.to.have.status(400));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Generate Speech - With Auto-Translate",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"text\": \"Welcome to our application.\",\n  \"language\": \"hi\",\n  \"voice\": \"hi-standard\",\n  \"auto_translate\": true\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/tts", "host": ["{{baseUrl}}"], "path": ["api", "tts"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+              "pm.test('Response includes translated_text', () => {",
+              "  const json = pm.response.json();",
+              "  pm.expect(json.success).to.be.true;",
+              "  pm.expect(json.translated_text).to.be.a('string');",
+              "  pm.expect(json.original_text).to.eql('Welcome to our application.');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Generate Speech - auto_translate Not Boolean (400)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"text\": \"Hello\",\n  \"language\": \"en\",\n  \"voice\": \"en-us-standard\",\n  \"auto_translate\": \"yes\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/tts", "host": ["{{baseUrl}}"], "path": ["api", "tts"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 400', () => pm.response.to.have.status(400));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Generate Speech - Wrong Content-Type (400)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "text/plain" }],
+        "body": {
+          "mode": "raw",
+          "raw": "text=Hello&language=en&voice=en-us-standard"
+        },
+        "url": { "raw": "{{baseUrl}}/api/tts", "host": ["{{baseUrl}}"], "path": ["api", "tts"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 400', () => pm.response.to.have.status(400));"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

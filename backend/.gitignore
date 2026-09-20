@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.env
+venv/
+.venv/
+.pytest_cache/
+generated_audio/*.mp3
+!generated_audio/.gitkeep

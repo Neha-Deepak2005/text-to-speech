@@ -1,0 +1,25 @@
+# Render Blueprint — deploys the Flask backend with almost no manual setup.
+# In the Render dashboard: New -> Blueprint -> connect this repo -> Apply.
+# After the frontend is deployed on Vercel, come back and set FRONTEND_ORIGIN
+# below (via the Render dashboard's Environment tab) to the real Vercel URL,
+# then trigger a manual redeploy.
+services:
+  - type: web
+    name: text-to-speech-backend
+    runtime: python
+    rootDir: backend
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: FLASK_DEBUG
+        value: "False"
+      - key: FRONTEND_ORIGIN
+        value: "http://localhost:5173"
+      - key: MAX_TEXT_LENGTH
+        value: "500"
+      - key: AUDIO_RETENTION_MINUTES
+        value: "30"
+      - key: RATE_LIMIT_TTS
+        value: "10 per minute"
