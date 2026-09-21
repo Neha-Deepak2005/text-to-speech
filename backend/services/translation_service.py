@@ -7,17 +7,23 @@ useful when the user types in one language (e.g. English) but wants the
 speech spoken in another (e.g. Hindi) — gTTS itself only pronounces text
 using a language's phonetics, it does not translate.
 
-Uses deep-translator's GoogleTranslator, which — like gTTS — calls Google's
-free translation endpoint and needs no API key.
+Two independent, free, no-API-key providers are used, in order:
+
+1. GoogleTranslator (deep-translator) — same free endpoint gTTS uses.
+2. MyMemoryTranslator (deep-translator) — a separate free translation
+   service, used only as a fallback.
+
+Google's free endpoint enforces a hard rate limit (5 requests/sec, 200k/day)
+per source IP. On a platform like Render's free tier, the outbound IP is
+shared across many unrelated apps, so that limit can be hit even when this
+app alone is well within it — and, since it's shared infrastructure, simply
+waiting doesn't reliably fix it. Falling back to a second, differently
+rate-limited provider makes translation resilient to that: it's very
+unlikely both providers are rate-limited on the same shared IP at once.
 """
 
-from deep_translator import GoogleTranslator
-from deep_translator.exceptions import (
-    LanguageNotSupportedException,
-    NotValidPayload,
-    RequestError,
-    TranslationNotFound,
-)
+from deep_translator import GoogleTranslator, MyMemoryTranslator
+from deep_translator.exceptions import LanguageNotSupportedException, NotValidPayload
 
 
 class TranslationServiceError(Exception):
@@ -31,11 +37,63 @@ class TranslationServiceError(Exception):
 
 # deep-translator's supported-language codes don't always match our app's
 # internal language codes (used for both TTS and the UI). Only "zh" needs
-# remapping today — deep-translator expects "zh-CN" for Chinese — but this
-# table is the single place to add any future mismatch.
-TRANSLATE_LANGUAGE_OVERRIDES = {
+# remapping for Google today — deep-translator expects "zh-CN" for Chinese.
+GOOGLE_LANGUAGE_OVERRIDES = {
     "zh": "zh-CN",
 }
+
+# Kept for backwards compatibility with anything importing the old name.
+TRANSLATE_LANGUAGE_OVERRIDES = GOOGLE_LANGUAGE_OVERRIDES
+
+# MyMemory (the fallback provider) doesn't accept bare 2-letter codes like
+# GoogleTranslator does — it requires a full locale code (e.g. "hi-IN", not
+# "hi"). This maps every language code our app supports to its MyMemory
+# equivalent. Verified against MyMemoryTranslator().get_supported_languages().
+MYMEMORY_LANGUAGE_CODES = {
+    "hi": "hi-IN",
+    "gu": "gu-IN",
+    "mr": "mr-IN",
+    "bn": "bn-IN",
+    "ta": "ta-IN",
+    "te": "te-IN",
+    "kn": "kn-IN",
+    "ml": "ml-IN",
+    "pa": "pa-IN",
+    "ur": "ur-PK",
+    "ne": "ne-NP",
+    "en": "en-GB",
+    "es": "es-ES",
+    "fr": "fr-FR",
+    "de": "de-DE",
+    "it": "it-IT",
+    "pt": "pt-PT",
+    "ru": "ru-RU",
+    "ja": "ja-JP",
+    "ko": "ko-KR",
+    "zh": "zh-CN",
+    "ar": "ar-SA",
+    "nl": "nl-NL",
+    "tr": "tr-TR",
+}
+
+
+def _translate_with_google(text: str, target_language: str, source_language: str) -> str:
+    target = GOOGLE_LANGUAGE_OVERRIDES.get(target_language, target_language)
+    return GoogleTranslator(source=source_language, target=target).translate(text)
+
+
+def _translate_with_mymemory(text: str, target_language: str, source_language: str) -> str:
+    target = MYMEMORY_LANGUAGE_CODES.get(target_language, target_language)
+    source = source_language if source_language == "auto" else MYMEMORY_LANGUAGE_CODES.get(
+        source_language, source_language
+    )
+    return MyMemoryTranslator(source=source, target=target).translate(text)
+
+
+_PROVIDERS = (
+    ("Google", _translate_with_google),
+    ("MyMemory", _translate_with_mymemory),
+)
 
 
 def translate_text(text: str, target_language: str, source_language: str = "auto") -> str:
@@ -43,24 +101,29 @@ def translate_text(text: str, target_language: str, source_language: str = "auto
     Translate `text` into `target_language` (one of our app's internal
     language codes). Returns the translated text.
 
-    If the text is already (or ends up) identical after translation — e.g.
-    the source and target language are the same — the original text is
-    returned as-is.
+    Tries each provider in `_PROVIDERS` in order and returns the first
+    successful, non-empty result. A provider-specific error (e.g. Google's
+    rate limit) moves on to the next provider rather than failing outright;
+    only when every provider has failed is a `TranslationServiceError`
+    raised. An invalid-language error is raised immediately, since retrying
+    with a different provider can't fix a bad input.
     """
-    translate_target = TRANSLATE_LANGUAGE_OVERRIDES.get(target_language, target_language)
+    last_error: Exception | None = None
 
-    try:
-        translated = GoogleTranslator(source=source_language, target=translate_target).translate(text)
-    except (LanguageNotSupportedException, NotValidPayload) as exc:
-        raise TranslationServiceError(f"Translation input was invalid: {exc}", 400) from exc
-    except (RequestError, TranslationNotFound) as exc:
-        raise TranslationServiceError(
-            "The translation service is currently unavailable. Please try again.", 503
-        ) from exc
-    except Exception as exc:  # noqa: BLE001 - translate any other failure into a clean 503
-        raise TranslationServiceError(f"Translation failed: {exc}", 503) from exc
+    for provider_name, translate_fn in _PROVIDERS:
+        try:
+            translated = translate_fn(text, target_language, source_language)
+        except (LanguageNotSupportedException, NotValidPayload) as exc:
+            raise TranslationServiceError(f"Translation input was invalid: {exc}", 400) from exc
+        except Exception as exc:  # noqa: BLE001 - fall through to the next provider
+            last_error = exc
+            continue
 
-    if not translated or not translated.strip():
-        raise TranslationServiceError("Translation returned empty text.", 503)
+        if translated and translated.strip():
+            return translated
+        last_error = RuntimeError(f"{provider_name} returned empty text.")
 
-    return translated
+    raise TranslationServiceError(
+        f"Translation failed on all available providers. Please try again shortly. ({last_error})",
+        503,
+    )

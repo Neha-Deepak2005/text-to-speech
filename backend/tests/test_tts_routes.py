@@ -26,6 +26,13 @@ def _fake_translate(monkeypatch, prefix="TRANSLATED: "):
     monkeypatch.setattr("deep_translator.GoogleTranslator.translate", fake_translate)
 
 
+def _fake_mymemory_translate(monkeypatch, prefix="MYMEMORY: "):
+    def fake_translate(self, text):
+        return prefix + text
+
+    monkeypatch.setattr("deep_translator.MyMemoryTranslator.translate", fake_translate)
+
+
 class TestHealth:
     def test_health_ok(self, client):
         resp = client.get("/api/health")
@@ -245,10 +252,13 @@ class TestAutoTranslate:
         assert resp.status_code == 400
 
     def test_translation_failure_returns_503(self, client, monkeypatch):
+        """Both providers failing (not just Google) is what should 503."""
+
         def raise_error(self, text):
             raise ConnectionError("simulated network failure")
 
         monkeypatch.setattr("deep_translator.GoogleTranslator.translate", raise_error)
+        monkeypatch.setattr("deep_translator.MyMemoryTranslator.translate", raise_error)
         resp = client.post(
             "/api/tts",
             json={
@@ -260,6 +270,32 @@ class TestAutoTranslate:
         )
         assert resp.status_code == 503
         assert resp.get_json()["success"] is False
+
+    def test_translate_falls_back_to_mymemory_when_google_fails(self, client, monkeypatch):
+        """A Google-only failure (e.g. its rate limit) should not surface as
+        an error to the user — the request should quietly succeed via the
+        MyMemory fallback instead."""
+
+        def raise_rate_limit(self, text):
+            raise Exception("You made too many requests to the server")
+
+        _fake_gtts_save(monkeypatch)
+        monkeypatch.setattr("deep_translator.GoogleTranslator.translate", raise_rate_limit)
+        _fake_mymemory_translate(monkeypatch)
+
+        resp = client.post(
+            "/api/tts",
+            json={
+                "text": "hello",
+                "language": "hi",
+                "voice": "hi-standard",
+                "auto_translate": True,
+            },
+        )
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["success"] is True
+        assert data["translated_text"] == "MYMEMORY: hello"
 
     def test_voices_response_includes_max_text_length(self, client):
         resp = client.get("/api/voices")

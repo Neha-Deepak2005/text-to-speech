@@ -77,6 +77,15 @@ Backend contract: `POST /api/tts` accepts an optional `auto_translate:
 boolean` field (default `false`). When `true`, the success response
 additionally includes `original_text` and `translated_text`.
 
+**Two-provider fallback:** Google's free translation endpoint enforces a
+hard rate limit (5 requests/sec, 200k/day) *per source IP* — and on shared
+hosting (like Render's free tier), that IP is shared across many unrelated
+apps, so the limit can be hit even when this app alone is well within it.
+To make the feature reliable on a deployed instance, `translation_service.py`
+tries Google first and, if that fails for any reason, automatically retries
+with **MyMemoryTranslator** (also free, no API key) before returning an
+error — so a rate limit on one provider doesn't take the feature down.
+
 ### Supported Languages
 
 24 languages, each verified against both gTTS's and deep-translator's
