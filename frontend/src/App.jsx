@@ -23,6 +23,7 @@ export default function App() {
   const [text, setText] = useState("");
   const [autoTranslate, setAutoTranslate] = useState(false);
   const [translatedText, setTranslatedText] = useState(null);
+  const [translationWarning, setTranslationWarning] = useState(null);
   const [audioUrl, setAudioUrl] = useState(null);
   const [loadingVoices, setLoadingVoices] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -68,6 +69,7 @@ export default function App() {
   async function handleGenerate() {
     setError(null);
     setTranslatedText(null);
+    setTranslationWarning(null);
 
     const trimmed = text.trim();
     if (trimmed.length === 0) {
@@ -90,6 +92,9 @@ export default function App() {
       setAudioUrl(toAbsoluteAudioUrl(data.audio_url));
       if (data.translated_text) {
         setTranslatedText(data.translated_text);
+      }
+      if (data.translation_warning) {
+        setTranslationWarning(data.translation_warning);
       }
     } catch (err) {
       setError(err.message);
@@ -154,6 +159,13 @@ export default function App() {
             <div className="rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
               <span className="font-medium">Translated text: </span>
               {translatedText}
+            </div>
+          )}
+
+          {translationWarning && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              <span className="font-medium">Note: </span>
+              {translationWarning}
             </div>
           )}
 

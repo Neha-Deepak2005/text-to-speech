@@ -64,12 +64,23 @@ def text_to_speech():
         return _error_response(exc.message, exc.status_code)
 
     translated_text = None
+    translation_warning = None
     if auto_translate:
         try:
             translated_text = translation_service.translate_text(text, target_language=language)
         except translation_service.TranslationServiceError as exc:
+            # Translation is a bonus feature layered on top of the core TTS
+            # flow (see README). Both free translation providers are
+            # subject to their own outside rate limits, which are outside
+            # this app's control and can occasionally fail together —
+            # rather than blocking speech generation entirely when that
+            # happens, fall back to speaking the original text and tell the
+            # caller why, so the core feature still works end-to-end.
             current_app.logger.warning("Translation failed: %s", exc.message)
-            return _error_response(exc.message, exc.status_code)
+            translation_warning = (
+                "Translation is temporarily unavailable, so the original text was "
+                f"used instead. ({exc.message})"
+            )
 
     text_for_speech = translated_text if translated_text else text
 
@@ -89,5 +100,7 @@ def text_to_speech():
     if translated_text:
         response["original_text"] = text
         response["translated_text"] = translated_text
+    if translation_warning:
+        response["translation_warning"] = translation_warning
 
     return jsonify(response), 200
