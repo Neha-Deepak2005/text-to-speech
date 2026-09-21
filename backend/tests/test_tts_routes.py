@@ -251,12 +251,18 @@ class TestAutoTranslate:
         )
         assert resp.status_code == 400
 
-    def test_translation_failure_returns_503(self, client, monkeypatch):
-        """Both providers failing (not just Google) is what should 503."""
+    def test_translation_failure_falls_back_to_original_text(self, client, monkeypatch):
+        """When both translation providers fail, speech generation should
+        not be blocked — it should proceed with the original text and
+        surface a non-fatal `translation_warning` instead of erroring out,
+        so the core TTS feature keeps working even if the bonus translate
+        feature is temporarily down (both providers have their own outside
+        rate limits, which are outside this app's control)."""
 
         def raise_error(self, text):
             raise ConnectionError("simulated network failure")
 
+        _fake_gtts_save(monkeypatch)
         monkeypatch.setattr("deep_translator.GoogleTranslator.translate", raise_error)
         monkeypatch.setattr("deep_translator.MyMemoryTranslator.translate", raise_error)
         resp = client.post(
@@ -268,8 +274,12 @@ class TestAutoTranslate:
                 "auto_translate": True,
             },
         )
-        assert resp.status_code == 503
-        assert resp.get_json()["success"] is False
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["success"] is True
+        assert "translation_warning" in data
+        assert "translated_text" not in data
+        assert data["audio_url"].startswith("/audio/")
 
     def test_translate_falls_back_to_mymemory_when_google_fails(self, client, monkeypatch):
         """A Google-only failure (e.g. its rate limit) should not surface as
@@ -330,7 +340,7 @@ class TestAutoTranslate:
         assert seen_sources == ["en-GB"]
         assert "auto" not in seen_sources
 
-    def test_mymemory_error_shaped_response_is_treated_as_failure(self, client, monkeypatch):
+    def test_mymemory_error_shaped_response_falls_back_to_original_text(self, client, monkeypatch):
         def raise_rate_limit(self, text):
             raise Exception("You made too many requests to the server")
 
@@ -352,8 +362,11 @@ class TestAutoTranslate:
                 "auto_translate": True,
             },
         )
-        assert resp.status_code == 503
-        assert resp.get_json()["success"] is False
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["success"] is True
+        assert "translation_warning" in data
+        assert "translated_text" not in data
 
     def test_voices_response_includes_max_text_length(self, client):
         resp = client.get("/api/voices")

@@ -93,6 +93,16 @@ Google is rate-limited *and* you typed non-English text, the MyMemory
 fallback may mistranslate — a rare double-edge case, and still strictly
 better than the request failing outright.
 
+**Graceful degradation:** both providers are free/no-key services with
+their own outside rate limits, and on shared hosting it's possible (if
+uncommon) for both to be limited at once. Rather than blocking speech
+generation entirely in that case, `POST /api/tts` falls back to speaking
+the *original* text and returns a non-fatal `translation_warning` field
+instead of an error — so the core TTS feature (the actual plan
+requirement) never fails just because the bonus translate feature is
+temporarily unavailable. The frontend shows this as an amber notice next
+to the audio player, distinct from a real error.
+
 ### Supported Languages
 
 24 languages, each verified against both gTTS's and deep-translator's
@@ -312,6 +322,18 @@ Success response (`200`), `auto_translate: true`:
 `audio_url` is relative to the backend base URL — fetch the full audio at
 `http://localhost:5000/audio/<file>.mp3`.
 
+Success response (`200`), `auto_translate: true` but both translation
+providers were unavailable — speech is generated from the original text
+instead, and `translation_warning` explains why (see "Graceful
+degradation" above):
+```json
+{
+  "success": true,
+  "audio_url": "/audio/3f2a1b9c....mp3",
+  "translation_warning": "Translation is temporarily unavailable, so the original text was used instead. (...)"
+}
+```
+
 Error response (`400` / `429` / `503`):
 ```json
 { "success": false, "error": "Text must not be empty." }
@@ -332,7 +354,7 @@ store generated audio permanently.
 | 405  | Method not allowed               | Wrong HTTP verb on a route |
 | 429  | Too many requests                | Rate limit exceeded on `/api/tts` (default: 10/minute/IP) |
 | 500  | Internal server error            | Unexpected server-side exception |
-| 503  | External service unavailable     | gTTS or the translation service couldn't be reached |
+| 503  | External service unavailable     | gTTS itself couldn't be reached (translation failures no longer 503 — see "Graceful degradation" above) |
 
 ---
 
@@ -346,13 +368,15 @@ source venv/bin/activate
 pytest -v
 ```
 
-41 tests cover: health check, listing/filtering voices, successful
+44 tests cover: health check, listing/filtering voices, successful
 generation, serving the generated file, empty/over-limit/missing text,
 invalid language, voice-doesn't-belong-to-language, non-JSON body,
 simulated provider failure (→ 503), auto-translate (success, default-off,
-invalid type, translation-provider failure → 503), that all 11 Indian +
-13 other languages are present and each generates speech, that the four
-real regional-accent voices (French Canada, Portuguese Portugal, Chinese
+invalid type, fallback from Google to MyMemory on failure, MyMemory's
+"auto"-source quirk, and both providers failing gracefully falling back to
+the original text rather than erroring), that all 11 Indian + 13 other
+languages are present and each generates speech, that the four real
+regional-accent voices (French Canada, Portuguese Portugal, Chinese
 Simplified/Taiwan) pass the *correct* gTTS language code rather than
 silently reusing the parent language, 404/405 error handling, and a
 path-traversal safety check on `/audio/<filename>`. The gTTS and
