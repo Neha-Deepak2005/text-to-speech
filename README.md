@@ -86,6 +86,13 @@ tries Google first and, if that fails for any reason, automatically retries
 with **MyMemoryTranslator** (also free, no API key) before returning an
 error — so a rate limit on one provider doesn't take the feature down.
 
+One caveat: MyMemory's API (unlike Google's) can't auto-detect the source
+language, so the fallback assumes English input, matching this app's
+documented use case ("type in English, hear it in another language"). If
+Google is rate-limited *and* you typed non-English text, the MyMemory
+fallback may mistranslate — a rare double-edge case, and still strictly
+better than the request failing outright.
+
 ### Supported Languages
 
 24 languages, each verified against both gTTS's and deep-translator's

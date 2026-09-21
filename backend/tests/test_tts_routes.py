@@ -297,6 +297,64 @@ class TestAutoTranslate:
         assert data["success"] is True
         assert data["translated_text"] == "MYMEMORY: hello"
 
+    def test_mymemory_fallback_uses_english_not_auto_as_source(self, client, monkeypatch):
+        """Regression test: MyMemory's API doesn't support 'auto' as a
+        source language and silently returns an error message as if it
+        were the translation instead of raising. The fallback must send a
+        real source language (English), never 'auto', and must treat an
+        error-shaped response as a failure rather than real output."""
+        seen_sources = []
+
+        def raise_rate_limit(self, text):
+            raise Exception("You made too many requests to the server")
+
+        def fake_mymemory_translate(self, text):
+            seen_sources.append(self._source)
+            return "MYMEMORY: " + text
+
+        _fake_gtts_save(monkeypatch)
+        monkeypatch.setattr("deep_translator.GoogleTranslator.translate", raise_rate_limit)
+        monkeypatch.setattr("deep_translator.MyMemoryTranslator.translate", fake_mymemory_translate)
+
+        resp = client.post(
+            "/api/tts",
+            json={
+                "text": "hi how are you",
+                "language": "ml",
+                "voice": "ml-standard",
+                "auto_translate": True,
+            },
+        )
+        assert resp.status_code == 200
+        assert resp.get_json()["translated_text"] == "MYMEMORY: hi how are you"
+        assert seen_sources == ["en-GB"]
+        assert "auto" not in seen_sources
+
+    def test_mymemory_error_shaped_response_is_treated_as_failure(self, client, monkeypatch):
+        def raise_rate_limit(self, text):
+            raise Exception("You made too many requests to the server")
+
+        def fake_mymemory_error_text(self, text):
+            return "'AUTO' IS AN INVALID SOURCE LANGUAGE, SELECT A SUPPORTED LANGUAGE"
+
+        _fake_gtts_save(monkeypatch)
+        monkeypatch.setattr("deep_translator.GoogleTranslator.translate", raise_rate_limit)
+        monkeypatch.setattr(
+            "deep_translator.MyMemoryTranslator.translate", fake_mymemory_error_text
+        )
+
+        resp = client.post(
+            "/api/tts",
+            json={
+                "text": "hello",
+                "language": "ml",
+                "voice": "ml-standard",
+                "auto_translate": True,
+            },
+        )
+        assert resp.status_code == 503
+        assert resp.get_json()["success"] is False
+
     def test_voices_response_includes_max_text_length(self, client):
         resp = client.get("/api/voices")
         data = resp.get_json()

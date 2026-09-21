@@ -82,12 +82,39 @@ def _translate_with_google(text: str, target_language: str, source_language: str
     return GoogleTranslator(source=source_language, target=target).translate(text)
 
 
+# MyMemory's API, unlike Google's, does not support "auto" as a source
+# language — it silently echoes an error message ("'AUTO' IS AN INVALID
+# SOURCE LANGUAGE...") back as if it were the translation, instead of
+# raising, so it must never be trusted blindly. Since this app's use case
+# is "type in English, hear it in another language" (see the Auto-translate
+# section in the README), English is used as MyMemory's source whenever the
+# caller only knows "auto" — a reasonable default here, though it means a
+# non-English input translated via the MyMemory fallback specifically may
+# come out wrong. Google (tried first) does support real auto-detection and
+# is unaffected by this.
+MYMEMORY_DEFAULT_SOURCE = "en-GB"
+
+# Fragments MyMemory has been observed to return, with a 200 status, as the
+# "translatedText" itself when something about the request was rejected.
+# Caught here so a bad response fails loudly (and falls through to the
+# final error) instead of silently reaching the user as if it were real
+# translated text.
+_MYMEMORY_ERROR_MARKERS = ("INVALID SOURCE LANGUAGE", "INVALID TARGET LANGUAGE", "MYMEMORY WARNING")
+
+
 def _translate_with_mymemory(text: str, target_language: str, source_language: str) -> str:
     target = MYMEMORY_LANGUAGE_CODES.get(target_language, target_language)
-    source = source_language if source_language == "auto" else MYMEMORY_LANGUAGE_CODES.get(
-        source_language, source_language
-    )
-    return MyMemoryTranslator(source=source, target=target).translate(text)
+    if source_language == "auto":
+        source = MYMEMORY_DEFAULT_SOURCE
+    else:
+        source = MYMEMORY_LANGUAGE_CODES.get(source_language, source_language)
+
+    result = MyMemoryTranslator(source=source, target=target).translate(text)
+
+    if result and any(marker in result.upper() for marker in _MYMEMORY_ERROR_MARKERS):
+        raise RuntimeError(f"MyMemory rejected the request: {result}")
+
+    return result
 
 
 _PROVIDERS = (
