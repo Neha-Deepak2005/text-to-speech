@@ -415,14 +415,17 @@ a persistent rate-limit backend (Redis) instead of in-memory.
 
 ---
 
-## 9. Deployment (suggested)
+## 9. Deployment (live)
 
-- **Frontend:** `npm run build` in `frontend/` produces `frontend/dist/` —
-  deploy to **Vercel** or **Netlify**, setting `VITE_API_BASE_URL` to your
-  deployed backend's URL as an environment variable.
-- **Backend:** deploy to **Render** or **Railway** — set `FRONTEND_ORIGIN`
-  to your deployed frontend's URL, and run with a production server, e.g.
-  `gunicorn app:app`.
+- **Frontend:** deployed on **Vercel** — https://text-to-speech-ten-sand.vercel.app
+  (built from `frontend/` via `npm run build`, with `VITE_API_BASE_URL` set
+  to the backend URL below as an environment variable).
+- **Backend:** deployed on **Render** — https://text-to-speech-backend-6lcn.onrender.com
+  (via the `render.yaml` Blueprint at the repo root, running
+  `gunicorn app:app`), with `FRONTEND_ORIGIN` set to the Vercel URL above.
+
+Render's free tier spins the backend down after inactivity, so the first
+request after a while can take 30-50 seconds to respond while it wakes up.
 
 ---
 
@@ -441,15 +444,22 @@ a persistent rate-limit backend (Redis) instead of in-memory.
 ## 11. Deliverables Checklist (Section 24 of the plan)
 
 - [x] Source code (this repository)
-- [ ] GitHub repository — push this folder and add the link here
+- [x] GitHub repository — https://github.com/Neha-Deepak2005/text-to-speech
 - [x] README documentation (this file)
 - [ ] Database schema — not applicable (Level 1 has no database)
 - [x] API documentation (Section 5 above)
 - [ ] UI screenshots — add after running the app
-- [ ] Deployment URL — add after deploying (Section 9)
+- [x] Deployment URL:
+  - Frontend (live app): https://text-to-speech-ten-sand.vercel.app
+  - Backend (API): https://text-to-speech-backend-6lcn.onrender.com
 - [x] Postman collection (`postman_collection.json`)
 - [ ] Project presentation
 - [ ] Short project demonstration
+
+> **Note on the backend URL:** it's hosted on Render's free tier, which
+> spins down after periods of inactivity. The first request after a lull
+> can take 30-50 seconds to wake it back up — if a demo/reviewer sees a
+> slow first response, that's why; it's normal and not a bug.
 
 ---
 
@@ -467,9 +477,9 @@ runway you have before the 20th.
   `source="auto"` for `GoogleTranslator(...).source` after translating, or
   use `langdetect` — and display it next to the translated text (e.g.
   "Detected: English → Hindi").
-- **Take the UI screenshots and fill in the deployment URL** in Section 11's
-  checklist — those two checklist items are the only ones actually
-  blocking your deliverables list right now.
+- **Take the UI screenshots** of the live site and add them to your
+  submission — the only checklist item in Section 11 still open besides
+  the presentation/demo.
 
 ### Medium (an hour or two) — good polish before a demo
 - **Cache identical requests.** If the same `(text, language, voice,
